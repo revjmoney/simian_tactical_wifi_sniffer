@@ -123,10 +123,15 @@ This is a **research / educational** tool for **networks you own or are authoriz
 Don't be a creep. Monitor mode captures whatever's in the air on the channel you tune to — keep
 it to your own gear and your own lab.
 
-## Credits
+## Credits & links
 
-**Simian Tactical Unit** — Rev. J. Money.
+**Simian Tactical Unit** — **Rev. J. Money**.
 Born from one long night of bringing a dead 2010 slider phone back to life as a pocket recon box.
+
+- 🌐 **Site** — [revjmoney.com](https://revjmoney.com)
+- 🎵 **Music** — [soundcloud.com/revjmoney](https://soundcloud.com/revjmoney)
+- 🛠️ **CNC / 3D print / laser / software** — [jmscnc.com](https://jmscnc.com)
+- 👕 **Tees** — [crazyshirtclub.com](https://crazyshirtclub.com)
 
 ## License
 
