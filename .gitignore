@@ -1,0 +1,24 @@
+# build output
+bin/
+gen/
+*.apk
+*.dex
+*.ap_
+
+# captures may contain real SSIDs/BSSIDs - never commit them
+*.pcap
+recon_captures/
+
+# signing keys - never commit
+*.keystore
+*.jks
+debug.keystore
+
+# compiled native
+setchan/setchan
+*.o
+
+# misc / OS
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Simian${{ matrix.name }}.apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: sniffer
+            pkg: com/reconmonkey/capture
+            name: Sniffer
+          - app: server
+            pkg: com/reconmonkey/server
+            name: Server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android platform 34 and build-tools 34.0.0
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platforms;android-34" "build-tools;34.0.0" > /dev/null
+      - name: Build (same steps as build_apk.bat, minus adb install)
+        env:
+          APP: ${{ matrix.app }}
+          PKG: ${{ matrix.pkg }}
+          NAME: Simian${{ matrix.name }}
+        run: |
+          set -euo pipefail
+          BT="$ANDROID_HOME/build-tools/34.0.0"
+          JAR="$ANDROID_HOME/platforms/android-34/android.jar"
+          P="$PWD/$APP"
+          rm -rf "$P/bin" "$P/gen"
+          mkdir -p "$P/bin/classes" "$P/gen"
+          echo "[1/5] aapt"
+          "$BT/aapt" package -f -m -J "$P/gen" -M "$P/AndroidManifest.xml" -S "$P/res" -I "$JAR" -F "$P/bin/resources.ap_"
+          echo "[2/5] javac"
+          javac -encoding UTF-8 -source 8 -target 8 -nowarn -cp "$JAR" -d "$P/bin/classes" "$P/gen/$PKG/R.java" "$P/src/$PKG/MainActivity.java"
+          echo "[3/5] d8"
+          "$BT/d8" --min-api 19 --lib "$JAR" --output "$P/bin" "$P"/bin/classes/$PKG/*.class
+          echo "[4/5] package dex"
+          cp "$P/bin/resources.ap_" "$P/bin/unsigned.apk"
+          (cd "$P/bin" && "$BT/aapt" add unsigned.apk classes.dex)
+          echo "[5/5] zipalign + sign with a throwaway CI key"
+          "$BT/zipalign" -f 4 "$P/bin/unsigned.apk" "$P/bin/aligned.apk"
+          export KS_PASS="$(openssl rand -hex 16)"
+          keytool -genkeypair -keystore "$RUNNER_TEMP/ci.jks" -storepass "$KS_PASS" -keypass "$KS_PASS" \
+            -alias ci -keyalg RSA -keysize 2048 -validity 30 -dname "CN=CI build" > /dev/null 2>&1
+          "$BT/apksigner" sign --ks "$RUNNER_TEMP/ci.jks" --ks-pass env:KS_PASS --key-pass env:KS_PASS \
+            --min-sdk-version 19 --out "$P/bin/$NAME.apk" "$P/bin/aligned.apk"
+          "$BT/apksigner" verify "$P/bin/$NAME.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Simian${{ matrix.name }}-apk
+          path: ${{ matrix.app }}/bin/Simian${{ matrix.name }}.apk
+          retention-days: 30
+          if-no-files-found: error
+
+  setchan:
+    name: Compile setchan (x86_64 and armhf)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install armhf cross compiler
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc-arm-linux-gnueabihf > /dev/null
+      - name: Build
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gcc -O2 -Wall setchan/setchan.c -o dist/setchan-x86_64
+          arm-linux-gnueabihf-gcc -O2 -Wall -static setchan/setchan.c -o dist/setchan-armhf-static
+          file dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: setchan
+          path: dist/
+          retention-days: 30
+          if-no-files-found: error
+
+  guard:
+    name: Private data guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Block home IPs, personal email, tokens, keys and secret project names
+        run: |
+          found=0
+          if git grep -n -I -E '192\.168\.1\.[0-9]+|myemail937|ghp_[A-Za-z0-9]{20,}|github_pat_|-----BEGIN [A-Z ]*PRIVATE KEY' -- . ':!.github/workflows/ci.yml'; then found=1; fi
+          if git grep -n -I -i -E 'rose.?engine|guilloche|gen-rose' -- . ':!.github/workflows/ci.yml'; then found=1; fi
+          if [ "$found" = 1 ]; then
+            echo "::error::Private data pattern found. Remove it before merging."
+            exit 1
+          fi
+          echo "Guard clean."
