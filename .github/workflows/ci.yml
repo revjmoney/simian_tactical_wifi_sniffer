@@ -68,7 +68,7 @@ jobs:
           "$BT/apksigner" sign --ks "$RUNNER_TEMP/ci.jks" --ks-pass env:KS_PASS --key-pass env:KS_PASS \
             --min-sdk-version 19 --out "$P/bin/$NAME.apk" "$P/bin/aligned.apk"
           "$BT/apksigner" verify "$P/bin/$NAME.apk"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: Simian${{ matrix.name }}-apk
           path: ${{ matrix.app }}/bin/Simian${{ matrix.name }}.apk
@@ -92,7 +92,7 @@ jobs:
           gcc -O2 -Wall setchan/setchan.c -o dist/setchan-x86_64
           arm-linux-gnueabihf-gcc -O2 -Wall -static setchan/setchan.c -o dist/setchan-armhf-static
           file dist/*
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: setchan
           path: dist/
